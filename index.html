@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Para Ti 💛</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@300;400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Quicksand', sans-serif;
+            background: #080a10;
+        }
+        .font-romantic {
+            font-family: 'Dancing Script', cursive;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            touch-action: none;
+        }
+        .glow-text {
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.6), 0 0 20px rgba(255, 193, 7, 0.3);
+        }
+        .glass-minimal {
+            background: rgba(15, 20, 32, 0.45);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 215, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden bg-slate-950 text-white">
+
+    <!-- Canvas principal -->
+    <canvas id="flowerCanvas" class="absolute inset-0 z-0 cursor-pointer"></canvas>
+
+    <!-- Encabezado flotante -->
+    <div class="absolute top-6 left-0 right-0 z-10 flex justify-center px-4 pointer-events-none">
+        <div id="romanticBadge" class="glass-minimal px-6 py-2.5 rounded-full text-center transition-all duration-1000 opacity-90 shadow-lg border border-amber-300/20">
+            <h1 class="text-2xl sm:text-3xl font-romantic text-amber-300 glow-text inline-block mr-1">
+                Para ti, mi amor
+            </h1>
+            <span class="text-amber-400 text-lg">💛</span>
+            <p id="subHint" class="text-[11px] sm:text-xs text-amber-200/70 font-light tracking-wider mt-0.5">
+                Floreciendo para ti...
+            </p>
+        </div>
+    </div>
+
+    <!-- Botón discreto de reinicio (icono superior derecho) -->
+    <button id="btnReset" title="Reiniciar Jardín" class="absolute top-6 right-6 z-20 w-10 h-10 rounded-full glass-minimal flex items-center justify-center text-amber-300/60 hover:text-amber-300 hover:bg-white/10 transition-all duration-300 active:scale-95 border border-amber-300/20 shadow-md">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+    </button>
+
+    <script>
+        const canvas = document.getElementById('flowerCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const subHint = document.getElementById('subHint');
+        const btnReset = document.getElementById('btnReset');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initBackgroundStars();
+        });
+
+        let flowers = [];
+        let particles = [];
+        let stars = [];
+        let phase = 0;
+        let autoGardenTimer = null;
+
+        function initBackgroundStars() {
+            stars = [];
+            for (let i = 0; i < 90; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height * 0.75,
+                    size: Math.random() * 1.6 + 0.4,
+                    alpha: Math.random() * 0.8 + 0.2,
+                    speed: Math.random() * 0.02 + 0.005
+                });
+            }
+        }
+        initBackgroundStars();
+
+        function addPollenSparkle(x, y, count = 5) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x + (Math.random() - 0.5) * 24,
+                    y: y + (Math.random() - 0.5) * 24,
+                    vx: (Math.random() - 0.5) * 1.2,
+                    vy: -Math.random() * 1.2 - 0.4,
+                    size: Math.random() * 2.2 + 0.8,
+                    alpha: 1,
+                    decay: Math.random() * 0.018 + 0.008
+                });
+            }
+        }
+
+        class Flower {
+            constructor(startX, startY, targetHeight, maxPetalRadius, petalCount = 12, isMain = false) {
+                this.startX = startX;
+                this.startY = startY;
+                this.targetHeight = targetHeight;
+                this.maxPetalRadius = maxPetalRadius;
+                this.petalCount = petalCount;
+                this.isMain = isMain;
+
+                this.stemProgress = 0;
+                this.budProgress = 0;
+                this.bloomProgress = 0;
+                this.glowPulse = 0;
+
+                this.curveOffset = (Math.random() - 0.5) * (isMain ? 40 : 70);
+                this.leaves = [
+                    { at: 0.35, side: -1, size: 0, maxSize: 24 + Math.random() * 8 },
+                    { at: 0.65, side: 1, size: 0, maxSize: 20 + Math.random() * 8 }
+                ];
+
+                this.stemSpeed = isMain ? 0.007 : 0.016;
+                this.bloomSpeed = isMain ? 0.009 : 0.022;
+                this.isBloomed = false;
+            }
+
+            update() {
+                if (this.stemProgress < 1) {
+                    this.stemProgress += this.stemSpeed;
+                    if (this.stemProgress > 1) this.stemProgress = 1;
+
+                    this.leaves.forEach(leaf => {
+                        if (this.stemProgress > leaf.at) {
+                            const leafGrowth = (this.stemProgress - leaf.at) / (1 - leaf.at);
+                            leaf.size = Math.min(leaf.maxSize, leaf.maxSize * leafGrowth * 2);
+                        }
+                    });
+                } 
+                else if (this.budProgress < 1) {
+                    this.budProgress += 0.04;
+                    if (this.budProgress > 1) this.budProgress = 1;
+                } 
+                else if (this.bloomProgress < 1) {
+                    this.bloomProgress += this.bloomSpeed;
+                    if (this.bloomProgress >= 1) {
+                        this.bloomProgress = 1;
+                        if (!this.isBloomed) {
+                            this.isBloomed = true;
+                            this.onBloomComplete();
+                        }
+                    }
+                }
+
+                if (this.bloomProgress > 0.4) {
+                    this.glowPulse = Math.sin(Date.now() * 0.003) * 0.2 + 0.6;
+                }
+            }
+
+            onBloomComplete() {
+                const tip = this.getTipPosition();
+                addPollenSparkle(tip.x, tip.y, 10);
+
+                if (this.isMain && phase === 0) {
+                    startGardenExpansion();
+                }
+            }
+
+            getTipPosition() {
+                const t = this.stemProgress;
+                const p0 = { x: this.startX, y: this.startY };
+                const p1 = { x: this.startX + this.curveOffset, y: this.startY - this.targetHeight * 0.5 };
+                const p2 = { x: this.startX, y: this.startY - this.targetHeight };
+
+                const x = (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x;
+                const y = (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y;
+
+                return { x, y };
+            }
+
+            draw() {
+                const tip = this.getTipPosition();
+
+                // Tallo
+                ctx.beginPath();
+                ctx.moveTo(this.startX, this.startY);
+                const controlX = this.startX + this.curveOffset * this.stemProgress;
+                const controlY = this.startY - (this.targetHeight * 0.5) * this.stemProgress;
+                ctx.quadraticCurveTo(controlX, controlY, tip.x, tip.y);
+
+                ctx.strokeStyle = '#2d6a4f';
+                ctx.lineWidth = Math.max(2.5, 5.5 * (1 - (this.targetHeight / height) * 0.35));
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Hojas
+                this.leaves.forEach(leaf => {
+                    if (leaf.size > 0) {
+                        const leafT = leaf.at * this.stemProgress;
+                        const leafX = (1 - leafT) * (1 - leafT) * this.startX + 2 * (1 - leafT) * leafT * (this.startX + this.curveOffset) + leafT * leafT * this.startX;
+                        const leafY = (1 - leafT) * (1 - leafT) * this.startY + 2 * (1 - leafT) * leafT * (this.startY - this.targetHeight * 0.5) + leafT * leafT * (this.startY - this.targetHeight);
+
+                        ctx.save();
+                        ctx.translate(leafX, leafY);
+                        ctx.rotate(leaf.side * 0.65);
+                        
+                        ctx.beginPath();
+                        ctx.ellipse(leaf.side * leaf.size * 0.45, 0, leaf.size, leaf.size * 0.38, 0, 0, Math.PI * 2);
+                        ctx.fillStyle = '#40916c';
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                });
+
+                if (this.budProgress > 0) {
+                    ctx.save();
+                    ctx.translate(tip.x, tip.y);
+
+                    if (this.bloomProgress > 0) {
+                        const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, this.maxPetalRadius * 1.9);
+                        halo.addColorStop(0, `rgba(255, 215, 0, ${0.45 * this.glowPulse})`);
+                        halo.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                        ctx.fillStyle = halo;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, this.maxPetalRadius * 1.9, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    // Pétalos
+                    const r = this.maxPetalRadius * this.bloomProgress;
+                    const count = this.petalCount;
+
+                    for (let i = 0; i < count; i++) {
+                        const angle = (Math.PI * 2 / count) * i;
+                        
+                        ctx.save();
+                        ctx.rotate(angle);
+
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.quadraticCurveTo(r * 0.38, -r * 0.4, 0, -r);
+                        ctx.quadraticCurveTo(-r * 0.38, -r * 0.4, 0, 0);
+
+                        const petalGrad = ctx.createLinearGradient(0, 0, 0, -r);
+                        petalGrad.addColorStop(0, '#FF9E00');
+                        petalGrad.addColorStop(0.5, '#FFE066');
+                        petalGrad.addColorStop(1, '#FFC300');
+
+                        ctx.fillStyle = petalGrad;
+                        ctx.shadowColor = 'rgba(255, 215, 0, 0.35)';
+                        ctx.shadowBlur = 6;
+                        ctx.fill();
+
+                        ctx.restore();
+                    }
+
+                    // Centro
+                    const centerR = (this.maxPetalRadius * 0.26) * Math.max(this.budProgress, this.bloomProgress);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, centerR, 0, Math.PI * 2);
+                    
+                    const centerGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, centerR);
+                    centerGrad.addColorStop(0, '#78350f');
+                    centerGrad.addColorStop(0.85, '#451a03');
+                    centerGrad.addColorStop(1, '#290e02');
+
+                    ctx.fillStyle = centerGrad;
+                    ctx.fill();
+                    ctx.strokeStyle = '#d97706';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    ctx.restore();
+                }
+            }
+        }
+
+        function initMainFlower() {
+            flowers = [];
+            particles = [];
+            phase = 0;
+            if (autoGardenTimer) clearInterval(autoGardenTimer);
+
+            subHint.innerText = "Floreciendo para ti...";
+
+            const stemH = Math.min(height * 0.42, 360);
+            const petalR = Math.min(width * 0.11, 62);
+
+            flowers.push(new Flower(width / 2, height + 10, stemH, petalR, 14, true));
+        }
+
+        function startGardenExpansion() {
+            phase = 1;
+            subHint.innerText = "Toca la pantalla para sembrar más flores 💛";
+
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 40,
+                    spread: 80,
+                    origin: { y: 0.65 },
+                    colors: ['#FFD700', '#FFC107', '#FFE066']
+                });
+            }
+
+            let spawned = 0;
+            const maxAuto = 7;
+
+            autoGardenTimer = setInterval(() => {
+                if (spawned >= maxAuto) {
+                    clearInterval(autoGardenTimer);
+                    phase = 2;
+                    return;
+                }
+
+                const margin = width * 0.08;
+                const randomX = Math.random() < 0.5 
+                    ? margin + Math.random() * (width * 0.38) 
+                    : width * 0.54 + Math.random() * (width * 0.38);
+
+                const targetH = Math.min(height * 0.2 + Math.random() * (height * 0.25), 300);
+                const petalR = 26 + Math.random() * 22;
+
+                flowers.push(new Flower(randomX, height + 10, targetH, petalR, Math.floor(10 + Math.random() * 5), false));
+                spawned++;
+            }, 650);
+        }
+
+        function handleUserTouch(e) {
+            if (e.target.closest('#btnReset')) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+            const clickY = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+
+            const targetH = height - clickY;
+            if (targetH < 40) return;
+
+            const petalR = 25 + Math.random() * 20;
+            flowers.push(new Flower(clickX, height + 10, targetH, petalR, Math.floor(10 + Math.random() * 5), false));
+            addPollenSparkle(clickX, clickY, 8);
+        }
+
+        window.addEventListener('click', (e) => {
+            if (phase >= 1) handleUserTouch(e);
+        });
+
+        window.addEventListener('touchstart', (e) => {
+            if (phase >= 1) handleUserTouch(e);
+        }, { passive: true });
+
+        btnReset.addEventListener('click', (e) => {
+            e.stopPropagation();
+            initMainFlower();
+        });
+
+        function render() {
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+            bgGrad.addColorStop(0, '#060814');
+            bgGrad.addColorStop(0.65, '#101428');
+            bgGrad.addColorStop(1, '#1a1024');
+
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, width, height);
+
+            stars.forEach(star => {
+                star.alpha += Math.sin(Date.now() * star.speed) * 0.012;
+                ctx.fillStyle = `rgba(255, 255, 230, ${Math.abs(star.alpha)})`;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            flowers.forEach(flower => {
+                flower.update();
+                flower.draw();
+            });
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= p.decay;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.fillStyle = '#FFD700';
+                ctx.globalAlpha = p.alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+
+            if (Math.random() < 0.18 && flowers.length > 0) {
+                const bloomed = flowers.filter(f => f.bloomProgress > 0.7);
+                if (bloomed.length > 0) {
+                    const randomFlower = bloomed[Math.floor(Math.random() * bloomed.length)];
+                    const tip = randomFlower.getTipPosition();
+                    addPollenSparkle(tip.x, tip.y, 2);
+                }
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        window.onload = () => {
+            initMainFlower();
+            render();
+        };
+    </script>
+</body>
+</html>
